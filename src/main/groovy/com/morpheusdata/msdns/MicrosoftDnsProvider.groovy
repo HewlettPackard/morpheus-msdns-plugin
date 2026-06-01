@@ -15,7 +15,7 @@
 */
 package com.morpheusdata.msdns
 
-import com.morpheusdata.core.DNSProvider
+import com.morpheusdata.core.providers.DNSProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.util.ConnectionUtils
@@ -230,6 +230,11 @@ class MicrosoftDnsProvider implements DNSProvider {
     @Override
     void refresh(AccountIntegration integration) {
         try {
+            if (!integration.credentialLoaded) {
+                def cred = getMorpheus().getServices().getAccountCredential().loadCredentials(integration)
+                integration.setCredentialData(cred.getData())
+                integration.setCredentialLoaded(true)
+            }
             Map integrationConfig = integration.getConfigMap()
             // Are we using Agent or winRm for transport
             String rpcTransport = (integrationConfig?.agentRpc && integrationConfig?.agentRpc == "on") ? "agent" : "winrm"
@@ -249,17 +254,17 @@ class MicrosoftDnsProvider implements DNSProvider {
                     }
                     log.info("refresh - integration: ${integration.name} - Sync Completed in ${new Date().time - now.time}ms")
                     getMorpheus().getAsync().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.ok).subscribe().dispose()
-                    //getMorpheus().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.ok).subscribe().dispose()
                 } else {
                     log.warn("refresh - integration: ${integration.name} - Cannot access DNS Services via integration. Error : ${testDns}")
-                    getMorpheus().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.error, "Microsoft DNS integration ${integration.name} failed Service Tests")
+                    getMorpheus().getAsync().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.error, "Microsoft DNS integration ${integration.name} failed Service Tests").subscribe().dispose()
                 }
             } else {
                 log.warn("refresh - integration: ${integration.name} - Integration appears to be offline")
-                getMorpheus().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.error, "Microsoft DNS integration ${integration.name} ${integration.serviceUrl} is unreachable")
+                getMorpheus().getAsync().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.error, "Microsoft DNS integration ${integration.name} ${integration.serviceUrl} is unreachable").subscribe().dispose()
             }                       
         } catch(e) {
             log.error("refresh - integration: ${integration.name} - Exception raised refreshing integration ${e.getMessage()}")
+            getMorpheus().getAsync().getIntegration().updateAccountIntegrationStatus(integration, AccountIntegration.Status.error, "Microsoft DNS integration ${integration.name} raised unexpected exception: ${e.getMessage()}").subscribe().dispose()
         }
     }
 
