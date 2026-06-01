@@ -182,7 +182,7 @@ class MicrosoftDnsPluginHelper {
             $rtn=[PSCustomObject]@{status=0;errOut=$Null;cmdOut=$Null}
             $s = Join-Path -Path ([Environment]::GetEnvironmentVariable("LOCALAPPDATA")) -ChildPath "<%helperfile%>"
             if (Test-Path -Path $s) {
-                $i=New-Module -Name "MorpheusDnsHelper" -ScriptBlock ([ScriptBlock]::Create($(Get-Content -Raw -Path $s)))
+                $i=New-Module -Name "MorpheusDnsHelper" -Import -ScriptBlock ([ScriptBlock]::Create($(Get-Content -Raw -Path $s)))
             } else {
                 $rtn.status = 1
                 $rtn.errOut = [PSCustomObject]@{message="Cannot Find Powershell Helper script {0}" -F $s}
@@ -190,8 +190,8 @@ class MicrosoftDnsPluginHelper {
             }
             # Call the module functions returning the output to variable $rtn
             <%usercode%>
-            # Return results which will be json string
-            $rtn
+            # Return results as json string
+            if ($rtn -is [string]) { $rtn } else { $rtn | ConvertTo-Json -Depth 5 -Compress }
         '''
         log.debug("templateHelperScript - Returning Powershell Snippet to load Helper Script ${fileName}")
         return installScript.stripIndent().replace("<%helperfile%>",fileName)
