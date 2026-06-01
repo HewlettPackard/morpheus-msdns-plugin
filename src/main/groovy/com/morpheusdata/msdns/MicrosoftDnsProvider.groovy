@@ -383,7 +383,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         try {
             ServiceResponse listResults = listZones(integration)
             if (listResults.success) {
-                List apiItems = listResults.getData() as List<Map>
+                List apiItems = (listResults.getData() as List<Map>) ?: []
                 Observable<NetworkDomainIdentityProjection> domainRecords = morpheus.network.domain.listIdentityProjections(integration.id)
 
                 SyncTask<NetworkDomainIdentityProjection,Map,NetworkDomain> syncTask = new SyncTask(domainRecords, apiItems as Collection<Map>)
@@ -477,7 +477,7 @@ class MicrosoftDnsProvider implements DNSProvider {
 
             log.debug("cacheZoneRecords - domain: ${domain.externalId}, listResults: ${listResults}")
             if (listResults.success) {
-                List<Map> apiItems = listResults.getData() as List<Map>
+                List<Map> apiItems = (listResults.getData() as List<Map>) ?: []
                 //Unfortunately the unique identification matching for msdns requires the full record for now... so we have to load all records...this should be fixed
 
                 Observable<NetworkDomainRecord> domainRecords = getMorpheus().getNetwork().getDomain().getRecord().listIdentityProjections(domain,null).buffer(50).flatMap {domainIdentities ->
