@@ -109,7 +109,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         ServiceResponse<NetworkDomainRecord> addResult = ServiceResponse.prepare()
         def config = integration.getConfigMap()
         String computerName = integration.servicePath ?: "" // DnsServer if going via a service box
-        String serviceType = config?.serviceType
+        String serviceType = resolveServiceType(integration)
         Boolean createPtrRecord = (integration.serviceFlag == null) ? false : integration.serviceFlag
         String zone = record.networkDomain?.name // DNS Zone
         try {
@@ -173,7 +173,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         ServiceResponse<NetworkDomainRecord> deleteResult = ServiceResponse.prepare()
         def config = integration.getConfigMap()
         String computerName = integration.servicePath ?: "" // DnsServer if going via a service box
-        String serviceType = config?.serviceType
+        String serviceType = resolveServiceType(integration)
         String rrType = record.type
         String fqdn = record.fqdn
         String name = record.name
@@ -383,7 +383,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         try {
             ServiceResponse listResults = listZones(integration)
             if (listResults.success) {
-                List apiItems = listResults.getData() as List<Map>
+                List apiItems = (listResults.getData() as List<Map>) ?: []
                 Observable<NetworkDomainIdentityProjection> domainRecords = morpheus.network.domain.listIdentityProjections(integration.id)
 
                 SyncTask<NetworkDomainIdentityProjection,Map,NetworkDomain> syncTask = new SyncTask(domainRecords, apiItems as Collection<Map>)
@@ -477,7 +477,7 @@ class MicrosoftDnsProvider implements DNSProvider {
 
             log.debug("cacheZoneRecords - domain: ${domain.externalId}, listResults: ${listResults}")
             if (listResults.success) {
-                List<Map> apiItems = listResults.getData() as List<Map>
+                List<Map> apiItems = (listResults.getData() as List<Map>) ?: []
                 //Unfortunately the unique identification matching for msdns requires the full record for now... so we have to load all records...this should be fixed
 
                 Observable<NetworkDomainRecord> domainRecords = getMorpheus().getNetwork().getDomain().getRecord().listIdentityProjections(domain,null).buffer(50).flatMap {domainIdentities ->
@@ -784,7 +784,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         zoneFilters = config.zoneFilter ? config.zoneFilter.tokenize(",").collect { makeZoneFilterRegex(it) } : null
 
         try {
-            String serviceType = config.serviceType
+            String serviceType = resolveServiceType(integration)
             rpcCall = rpcService.executeCommand(MicrosoftDnsPluginHelper.buildGetDnsZoneScript(integration.servicePath, serviceType), integration)
         }
         catch (e) {
@@ -835,7 +835,7 @@ class MicrosoftDnsProvider implements DNSProvider {
         try {
             log.info("listRecords - integration ${integration.name} - importing zone ${domain.externalId}")
             String computerName = integration.servicePath ?: "" // DnsServer if going via a service box
-            String serviceType = integration.getConfigProperty("serviceType")
+            String serviceType = resolveServiceType(integration)
             rpcCall = rpcService.executeCommand(MicrosoftDnsPluginHelper.buildGetDnsResourceRecordScript(domain.externalId, computerName, serviceType), integration)
         }
         catch (e) {
@@ -866,7 +866,7 @@ class MicrosoftDnsProvider implements DNSProvider {
      */
     ServiceResponse testDnsServiceProfile(AccountIntegration integration) {
 
-        String serviceType = integration.getConfigProperty("serviceType")
+        String serviceType = resolveServiceType(integration)
         String command
         try {
             log.info("testDnsServiceProfile - integration ${integration.name} - Testing access to DNS services using serviceType ${serviceType}")
@@ -1228,5 +1228,24 @@ class MicrosoftDnsProvider implements DNSProvider {
             return serviceTest
         }
 
+    }
+
+    /**
+     * Returns the effective DNS service type for the integration, falling back to a safe default
+     * when the config property is missing or empty. Existing integrations that pre-date the
+     * serviceType UI field may have an empty string stored; passing that to the PowerShell helper
+     * fails [ValidateSet("local","winrm","wmi")] silently (exitCode stays 0, cmdOut is null).
+     *
+     * Fallback rules mirror verifyAccountIntegration():
+     *   - servicePath is set  → a remote DNS server is targeted → default "winrm"
+     *   - servicePath is null → DNS is queried locally on the WinRM/agent host → default "local"
+     */
+    private String resolveServiceType(AccountIntegration integration) {
+        String serviceType = integration.getConfigProperty("serviceType")
+        if (!serviceType) {
+            serviceType = integration.servicePath ? "winrm" : "local"
+            log.warn("resolveServiceType - integration ${integration.name} - serviceType config is empty, defaulting to '${serviceType}'")
+        }
+        return serviceType
     }
 }
