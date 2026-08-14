@@ -1,73 +1,127 @@
 # Morpheus Microsoft DNS Plugin
 
-This plugin provides a DNS integration between [Microsoft DNS](https://learn.microsoft.com/en-us/windows-server/networking/dns/dns-top) and [Morpheus](https://morpheusdata.com). It enables DNS zone sync, DNS record sync, DNS record creation and removal, and optional PTR record creation from within the Morpheus platform.
+The Morpheus Microsoft DNS Plugin integrates Morpheus with Microsoft Windows DNS Server to provide DNS record automation. The plugin manages DNS records by executing PowerShell commands on the Windows DNS server via WinRM or a Morpheus agent (RPC), enabling automatic DNS registration and deregistration during instance provisioning and decommissioning.
 
-## Requirements
+## Table of Contents
 
-| Component | Minimum Version |
-|-----------|----------------|
-| Morpheus | 7.0.0 |
+- [Features](#features)
+- [Requirements](#requirements)
+- [Repository structure](#repository-structure)
+- [Building the plugin](#building-the-plugin)
+- [License](#license)
+- [Installing](#installing)
+- [Detailed Usage Steps](#detailed-usage-steps)
+- [API Endpoints](#api-endpoints)
 
-## Installation
-
-1. Download the latest `.jar` from the [Releases](https://github.com/HewlettPackard/morpheus-msdns-plugin/releases) page, or [build it yourself](#building).
-2. In Morpheus, navigate to **Administration → Integrations → Plugins**.
-3. Click **Browse** and upload the `.jar` file.
-4. The **Microsoft DNS** integration type will appear after the plugin loads.
-
-## Configuration
-
-When adding a Microsoft DNS integration in Morpheus (**Administration → Integrations → Add Integration**), provide the following:
-
-| Field | Description |
-|-------|-------------|
-| **RPC Server** | Windows server Morpheus connects to for RPC access. This can also be the DNS server. |
-| **Rpc Port** | WinRM RPC port used when agent RPC is disabled. Defaults to `5985`. |
-| **Use Agent for Rpc** | Use the Morpheus Agent on the RPC server as the RPC transport instead of WinRM. |
-| **Credentials** | Morpheus username/password credential used by the integration. |
-| **Username** | Local username field used when not selecting a stored credential. |
-| **Password** | Local password field used when not selecting a stored credential. |
-| **DNS Server** | DNS server to manage when it is different from the RPC server. |
-| **Service Type** | How the RPC server accesses the DNS server: local, WMI, or WinRM. |
-| **Zone Filter** | Comma-separated glob-style zone filters. Leave blank to import all zones. |
-| **Inventory Existing** | Import existing resource records from matching zones. |
-| **Create Pointers** | Attempt to create PTR records when forward records are created. |
+---
 
 ## Features
 
-### DNS Management
-The plugin registers a `DNSProvider` for Microsoft DNS. Supported operations include:
+### Microsoft DNS Record Management
 
-- Create DNS records during Morpheus provisioning workflows
-- Remove DNS records during teardown or manual cleanup workflows
-- Validate and normalize DNS records before creation
-- Support `A`, `AAAA`, `CNAME`, and `PTR` records
-- Optionally request PTR record creation when creating forward records
+Create and delete DNS records on a Windows DNS server when instances are provisioned or decommissioned. Supports WinRM and Morpheus agent transport for remote PowerShell execution.
 
-### DNS Sync
-The following resources are discovered and kept in sync from Microsoft DNS:
+### Cloud Sync
 
-- **DNS Zones** — forward and reverse zones matching the configured zone filter
-- **DNS Records** — existing zone records when **Inventory Existing** is enabled
+Morpheus synchronises the following Microsoft DNS resources for inventory:
 
-Any additions, updates, and removals discovered in Microsoft DNS are reflected in Morpheus on the next integration refresh.
+- DNS zones and their records
 
-### RPC Connectivity Options
-Microsoft DNS operations are executed through a Windows RPC server. The integration supports:
+---
 
-- WinRM-based RPC access to the configured RPC server
-- Morpheus Agent-based RPC access from a managed Windows server
-- Local, WMI, or WinRM access from the RPC server to the DNS server
-- A built-in service test endpoint for validating integration connectivity
+## Requirements
 
-## Building
+| Requirement | Version |
+|-------------|---------|
+| Morpheus | 7.0.0 or later |
+| Java | 11 or later |
+| Gradle | Use the included Gradle wrapper (`./gradlew`) |
 
-```bash
-./gradlew shadowJar
+Additional prerequisites:
+
+- A Windows Server with the DNS Server role installed
+- WinRM enabled and accessible on the Windows DNS server, OR a Morpheus agent installed on the server for agent-based RPC
+- A Windows user account with permission to manage DNS records (typically Domain Admin or DNS Admin)
+- Network access from the Morpheus appliance (or agent) to the DNS server on the WinRM port (default: 5985/5986)
+
+---
+
+## Repository structure
+
+```
+src/main/groovy/com/morpheusdata/msdns/
+├── MicrosoftDnsPlugin.groovy           - Plugin entry point; registers MicrosoftDnsProvider, MicrosoftDnsOptionSourceProvider, and MicrosoftDnsPluginController
+├── MicrosoftDnsProvider.groovy         - DNSProvider implementation; DNS operations, sync, and OptionTypes
+├── MicrosoftDnsOptionSourceProvider.groovy - UI option source data
+├── MicrosoftDnsPluginController.groovy - Custom UI controller for plugin endpoints
+├── MicrosoftDnsPluginHelper.groovy     - Shared helper methods
+└── MicrosoftDnsPluginRpcService.groovy - RPC service; executes PowerShell commands via WinRM or agent
+src/main/resources/hbs/                 - Handlebars UI templates
+build.gradle, gradle.properties         - Build configuration and plugin metadata
 ```
 
-The plugin JAR will be written to `build/libs/`.
+---
+
+## Building the plugin
+
+Run the following command to compile and package the plugin jar:
+
+```bash
+./gradlew clean build
+```
+
+The packaged jar will be written to `build/libs/`.
+
+To execute tests, use the following command:
+
+```bash
+./gradlew test
+```
+
+---
 
 ## License
 
-Copyright 2022 the original author or authors. Licensed under the [Apache License, Version 2.0](LICENSE).
+This project is licensed under the Apache License 2.0.
+
+See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Installing
+
+1. Build the plugin (see [Building the plugin](#building-the-plugin)) or download a released jar.
+2. In Morpheus, navigate to **Administration > Integrations > Plugins**.
+3. Click **Add** and upload the `morpheus-msdns-plugin-<version>.jar` from `build/libs/`.
+4. Navigate to **Infrastructure > DNS > Add** and select **Microsoft DNS** to configure the integration.
+
+---
+
+## Detailed Usage Steps
+
+### Adding a Microsoft DNS Integration
+
+1. Go to **Infrastructure > DNS > Add**.
+2. Select **Microsoft DNS** as the DNS provider type.
+3. Configure:
+   - **RPC Server** — hostname or IP of the Windows DNS server
+   - **RPC Port** — WinRM port (default: 5985 for HTTP, 5986 for HTTPS)
+   - **Use Agent for RPC** — enable to use a Morpheus agent instead of WinRM
+   - **Credentials** — Windows user credentials with DNS management permissions
+   - **Username** and **Password**
+   - **DNS Server** — DNS server hostname (may differ from the RPC server)
+4. Save. Morpheus validates connectivity and syncs DNS zones.
+
+### Creating DNS Records Automatically
+
+When an instance is provisioned on a network with Microsoft DNS configured, Morpheus automatically creates the DNS A record (and optionally PTR record) on the Windows DNS server using PowerShell via WinRM or agent.
+
+### Removing DNS Records
+
+When an instance is decommissioned or its DNS record removed, Morpheus executes the appropriate PowerShell command to delete the record from the Windows DNS server.
+
+---
+
+## API Endpoints
+
+This plugin does not use a REST API. It communicates with the Windows DNS server by executing **PowerShell commands via WinRM** (HTTP port 5985 or HTTPS port 5986) or via a **Morpheus agent** installed on the DNS server. DNS operations are performed using the Windows `DnsServer` PowerShell module.
