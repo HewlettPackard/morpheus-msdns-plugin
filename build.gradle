@@ -55,6 +55,11 @@ dependencies {
 	testImplementation "org.spockframework:spock-core:$spockVersion"
 	testImplementation 'cglib:cglib-nodep:3.2.12'
 
+	constraints {
+		testImplementation('org.testng:testng:7.5.1') {
+			because('fixes CVE-2022-4065 in the transitive test dependency')
+		}
+	}
 }
 
 
