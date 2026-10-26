@@ -56,6 +56,9 @@ dependencies {
 	testImplementation 'cglib:cglib-nodep:3.2.12'
 
 	constraints {
+		testImplementation('org.apache.ant:ant:1.10.11') {
+			because('fixes CVE-2021-36373 and CVE-2021-36374 in the transitive test dependency')
+		}
 		testImplementation('org.testng:testng:7.5.1') {
 			because('fixes CVE-2022-4065 in the transitive test dependency')
 		}
